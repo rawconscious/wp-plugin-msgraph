@@ -156,27 +156,27 @@ class RC_MSGraph {
 	 * Create an outlook calendar event
 	 *
 	 * @param array  $user_data .
-	 * @param string $start_date_time .
-	 * @param string $end_date_time .
+	 * @param string $event_data .
+	 * @param string $mail_template .
 	 *
 	 * @return array $response
 	 */
-	public static function create_event( $user_data, $start_date_time, $end_date_time ) {
+	public static function create_event( $user_data, $event_data, $mail_template = false ) {
 
 		$token = self::get_app_only_token();
 		self::$app_client->setAccessToken( $token );
 
 		$start = array(
-			'dateTime' => $start_date_time,
+			'dateTime' => $event_data['start_date_time'],
 			'timeZone' => 'UTC',
 		);
 
 		$end = array(
-			'dateTime' => $end_date_time,
+			'dateTime' => $event_data['end_date_time'],
 			'timeZone' => 'UTC',
 		);
 
-		$attedees = array(
+		$attedees      = array(
 			array(
 				'emailAddress' => array(
 					'name'    => $user_data['name'],
@@ -184,12 +184,19 @@ class RC_MSGraph {
 				),
 			),
 		);
-		$event    = new Model\Event();
-		$event->setSubject( 'Teaming meeting with client' )
+		$subject  = isset( $_ENV['RC_MSGRAPH_ORG'] ) ? 'Meeting Scheduled with' . $_ENV['RC_MSGRAPH_ORG'] : 'Meeting Scheduled';// phpcs:ignore
+		$mail_template = $mail_template ? $mail_template : 'We are pleased to inform you that your appointment with us has been confirmed. We look forward to the discussion.';
+		$event         = new Model\Event();
+		$event->setSubject( $subject )
 		->setStart( $start )
 		->setEnd( $end )
 		->setAttendees( $attedees )
-		->setLocation( new Model\Location( array( 'displayName' => 'Team Meeting' ) ) );
+		->setBody(
+			array(
+				'contentType' => 'html',
+				'content'     => $mail_template,
+			)
+		);
 
 		$user        = isset( $_ENV['RC_MSGRAPH_USER'] ) ? $_ENV['RC_MSGRAPH_USER'] : 'admin'; //phpcs:ignore.
 		$request_url = '/users/' . $user . '/events';
@@ -198,43 +205,40 @@ class RC_MSGraph {
 						->attachBody( $event )
 						->setReturnType( Model\Event::class )
 						->execute();
-			return $response;
+			return array(
+				'isSuccess'    => true,
+				'meeting_link' => $response->getWeblink(),
+			);
 		} catch ( Exception $e ) {
-			return $e->getMessage();
+			return array(
+				'isSuccess' => true,
+				'error'     => $e->getMessage(),
+			);
 		}
 	}
 
 	/**
-	 * Undocumented function
+	 * Create_mail
 	 *
-	 * @param array  $user_data .
-	 * @param string $date .
-	 * @param string $time .
-	 * @param string $time_zone .
-	 * @param string $meeting_link .
+	 * @param array  $mail_data .
+	 * @param string $mail_template .
 	 *
 	 * @return array response
 	 */
-	public static function create_mail( $user_data, $date, $time, $time_zone, $meeting_link ) {
+	public static function create_mail( $mail_data, $mail_template ) {
 
 		$token = self::get_app_only_token();
 		self::$app_client->setAccessToken( $token );
 
-		$mail_template_data = array(
-			'name'         => $user_data['name'],
-			'email'        => $user_data['email'],
-			'date'         => $date,
-			'time'         => $time,
-			'time_zone'    => $time_zone,
-			'meeting_link' => $meeting_link,
+		$mail_subject    = isset( $mail_data['subject'] ) && ! empty( $mail_data['subject'] ) ? $mail_data['subject'] : 'Hello';
+		$mail_recipients = array(
+			array(
+				'emailAddress' => array(
+					'address' => isset( $mail_data['email'] ) && ! empty( $mail_data['email'] ) ? $mail_data['email'] : $_ENV['RC_MSGRAPH_USER'],// phpcs:ignore
+				),
+			),
 		);
-
-		$mail_template = rc_msgraph_get_email_template( $mail_template_data );
-
-		$mail_subject    = 'Team meetings on ' . $date;
-		$mail_recipients = array( array( 'emailAddress' => array( 'address' => $user_data['email'] ) ) );
-		$mail_body       =
-		array(
+		$mail_body       = array(
 			'contentType' => 'html',
 			'content'     => $mail_template,
 		);
@@ -253,9 +257,15 @@ class RC_MSGraph {
 						->attachBody( array( 'message' => $message ) )
 						->setReturnType( Model\Event::class )
 						->execute();
-			return $response;
+			return array(
+				'isSuccess' => true,
+				'response'  => $response,
+			);
 		} catch ( Exception $e ) {
-			return $e->getMessage();
+			return array(
+				'isSuccess' => false,
+				'response'  => $e->getMessage(),
+			);
 		}
 	}
 }

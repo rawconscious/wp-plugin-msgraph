@@ -24,4 +24,3 @@ $dotenv->load();
 $dotenv->required( array( 'CLIENT_ID', 'CLIENT_SECRET', 'TENANT_ID' ) );
 
 require_once RC_MSGRAPH_PATH . '/includes/class-rc-msgraph.php';
-require_once RC_MSGRAPH_PATH . '/templates/email.php';
